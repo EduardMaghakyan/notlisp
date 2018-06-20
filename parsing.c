@@ -23,27 +23,69 @@ void add_history(char* unused) {}
 typedef struct {
   int type;
   long num;
-  int err;
+  char* err;
+  char* sym;
+  int count;
+  struct lval** cell;
 } lval;
 
 /* Possible lval types, error or number */
-enum { LVAL_NUM, LVAL_ERR };
+enum { LVAL_NUM, LVAL_ERR, LVAL_SYM, LVAL_SEXPR };
 
 /* Possible eror types */
 enum { LERR_DIV_ZERO, LERR_BAD_OP, LERR_BAD_NUM };
 
-lval lval_num(long x) {
-  lval v;
-  v.type = LVAL_NUM;
-  v.num = x;
+lval* lval_num(long x) {
+  lval* v malloc(sizeof(lval));
+  v->type = LVAL_NUM;
+  v->num = x;
   return v;
 }
 
-lval lval_err(int x) {
-  lval v;
-  v.type = LVAL_ERR;
-  v.err = x;
+lval* lval_err(char* m) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_ERR;
+  v->err = malloc(strlen(m) + 1);
+  strcpy(v->err, m);
   return v;
+}
+
+lval* lval_sym(char* s) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_SYM;
+  v->sym = mallof(strlen(s) + 1);
+  strcpy(v->sym, s);
+  return v;
+}
+
+lval* lval_sexpr(void) {
+  lval* v = malloc(sizeof(lval));
+  v->type = LVAL_SEXPR;
+  v->count = 0;
+  v->cell = NULL;
+  return v;
+}
+
+void lval_del(lval* v) {
+  switch (v->type) {
+    /* Do nothing if number */
+    case LVAL_NUM: break;
+
+    /* Free up err and sym if error */
+    case LVAL_ERR: free(v->err); break;
+    case LVAL_SYM: free(v->sym); break;
+    
+    /* for sexpr delete all children */
+    case LVAL_SEXPR:
+       for (int i=0; i< v->count; i++) {
+         lval_del(v->cell[i]);
+       }
+       free(v->cell);
+    break;
+  }
+
+  /* free memory allocated for "lval" struct */
+  free(v);
 }
 
 /* Print lval */
@@ -98,7 +140,7 @@ lval eval_op(lval x, char* op, lval y) {
   if (strcmp(op, "-") == 0) { return b ? lval_num(a - b) : lval_num(-a); }
   if (strcmp(op, "*") == 0 || strcmp(op, "mul") == 0) { return lval_num(a * b); }
   if (strcmp(op, "/") == 0 || strcmp(op, "div") == 0) {
-    return a ? lval_err(LERR_DIV_ZERO) : lval_num(a / b);
+    return a ? lval_num(a / b) : lval_err(LERR_DIV_ZERO);
   }
   if (strcmp(op, "%") == 0) { return lval_num(a % b); }
   if (strcmp(op, "^") == 0) { return lval_num(a ^ b); }
@@ -138,16 +180,18 @@ lval eval(mpc_ast_t* t) {
 
 int main(int argc, char** argv) {
   mpc_parser_t* Number = mpc_new("number");
-  mpc_parser_t* Operator = mpc_new("operator");
+  mpc_parser_t* Operator = mpc_new("symbol");
+  mpc_parser_t* Sexpr = mpc_new("sexpr");
   mpc_parser_t* Expr = mpc_new("expr");
   mpc_parser_t* NotLispy = mpc_new("notlispy");
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
     " number       : /-?[0-9]+\\.?[0-9]*/ ;"
     " operator     : /[\\+\\-\\*\\/\\%\\^]|add|sub|mul|div|min|max/ ;"
+    " sexpr        : '(' <expr>* ')' ;"
     " expr         : <number> | '(' <operator> <expr>+ ')' ;"
-    " notlispy    : /^/ <operator> <expr>+ /$/ ;   ",
-  Number, Operator, Expr, NotLispy);
+    " notlispy     : /^/ <operator> <expr>+ /$/ ;   ",
+  Number, Operator, Sexpr, Expr, NotLispy);
 
   while(1) {
     char* input = readline("not-lisp > ");
@@ -169,7 +213,7 @@ int main(int argc, char** argv) {
   }
 
 
-  mpc_cleanup(4, Number, Operator, Expr, NotLispy);
+  mpc_cleanup(5, Number, Operator, Sexpr, Expr, NotLispy);
   return 0;
 }
 
