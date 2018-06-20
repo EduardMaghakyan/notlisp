@@ -20,13 +20,32 @@ void add_history(char* unused) {}
 #include <editline/history.h>
 #endif
 
+
+long min(long x, long y) {
+  if (x < y) {
+    return x;
+  }
+
+  return y;
+}
+
+long max(long x, long y) {
+  if (x > y) {
+    return x;
+  }
+
+  return y;
+}
+
 long eval_op(long x, char* op, long y) {
-  if (strcmp(op, "+") == 0) { return x + y; }
-  if (strcmp(op, "-") == 0) { return x - y; }
-  if (strcmp(op, "*") == 0) { return x * y; }
-  if (strcmp(op, "/") == 0) { return x / y; }
+  if (strcmp(op, "+") == 0 || strcmp(op, "add") == 0) { return x + y; }
+  if (strcmp(op, "-") == 0) { return y ? x - y : -x; }
+  if (strcmp(op, "*") == 0 || strcmp(op, "mul") == 0) { return x * y; }
+  if (strcmp(op, "/") == 0 || strcmp(op, "div") == 0) { return x / y; }
   if (strcmp(op, "%") == 0) { return x % y; }
   if (strcmp(op, "^") == 0) { return x ^ y; }
+  if (strcmp(op, "min") == 0) { return min(x, y); }
+  if (strcmp(op, "max") == 0) { return max(x, y); }
   return 0;
 }
 
@@ -45,6 +64,10 @@ long eval(mpc_ast_t* t) {
 
   /* Combine the rest*/
   int i = 3;
+  if (!strstr(t->children[i]->tag, "expr")) {
+	return eval_op(x, op, 0);
+  }
+
   while(strstr(t->children[i]->tag, "expr")) {
     x = eval_op(x, op, eval(t->children[i]));
     i++;
@@ -61,7 +84,7 @@ int main(int argc, char** argv) {
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
     " number       : /-?[0-9]+\\.?[0-9]*/ ;"
-    " operator     : /[\\+\\-\\*\\/\\%\\^]|add|sub|mul|div/ ;"
+    " operator     : /[\\+\\-\\*\\/\\%\\^]|add|sub|mul|div|min|max/ ;"
     " expr         : <number> | '(' <operator> <expr>+ ')' ;"
     " notlispy    : /^/ <operator> <expr>+ /$/ ;   ",
   Number, Operator, Expr, NotLispy);
