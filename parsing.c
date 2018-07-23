@@ -355,7 +355,7 @@ lval *lval_eval(lval *v)
   return v;
 }
 
-long min(long x, long y)
+double min(double x, double y)
 {
   if (x < y)
   {
@@ -365,7 +365,7 @@ long min(long x, long y)
   return y;
 }
 
-long max(long x, long y)
+double max(double x, double y)
 {
   if (x > y)
   {
