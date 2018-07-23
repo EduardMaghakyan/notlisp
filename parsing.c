@@ -24,7 +24,7 @@ void add_history(char *unused) {}
 typedef struct lval
 {
   int type;
-  long num;
+  double num;
   /* Error and Symbol types have some string data */
   char *err;
   char *sym;
@@ -129,6 +129,73 @@ lval *lval_add(lval *v, lval *x)
   return v;
 }
 
+lval *lval_pop(lval *v, int i)
+{
+  // Find item at index i
+  lval *x = v->cell[i];
+
+  // Shift memory
+  memmove(&v->cell[i], &v->cell[i + 1], sizeof(lval *) * (v->count - i - 1));
+
+  v->count--;
+
+  v->cell = realloc(v->cell, sizeof(lval *) * v->count);
+
+  return x;
+}
+
+lval *lval_take(lval *v, int i)
+{
+  lval *x = lval_pop(v, i);
+  lval_del(v);
+  return x;
+}
+
+/* Print lval */
+void lval_print(lval *v);
+void lval_expr_print(lval *v, char open, char close)
+{
+  putchar(open);
+  for (int i = 0; i < v->count; i++)
+  {
+
+    /* Print Value contained within */
+    lval_print(v->cell[i]);
+
+    /* Don't print trailing space if last element */
+    if (i != (v->count - 1))
+    {
+      putchar(' ');
+    }
+  }
+  putchar(close);
+}
+
+void lval_print(lval *v)
+{
+  switch (v->type)
+  {
+  case LVAL_NUM:
+    printf("%f", v->num);
+    break;
+  case LVAL_ERR:
+    printf("Error: %s", v->err);
+    break;
+  case LVAL_SYM:
+    printf("%s", v->sym);
+    break;
+  case LVAL_SEXPR:
+    lval_expr_print(v, '(', ')');
+    break;
+  }
+}
+
+void lval_println(lval *v)
+{
+  lval_print(v);
+  putchar('\n');
+}
+
 lval *lval_read(mpc_ast_t *t)
 {
 
@@ -174,74 +241,7 @@ lval *lval_read(mpc_ast_t *t)
   return x;
 }
 
-/* Print lval */
-void lval_print(lval *v);
-void lval_expr_print(lval *v, char open, char close)
-{
-  putchar(open);
-  for (int i = 0; i < v->count; i++)
-  {
-
-    /* Print Value contained within */
-    lval_print(v->cell[i]);
-
-    /* Don't print trailing space if last element */
-    if (i != (v->count - 1))
-    {
-      putchar(' ');
-    }
-  }
-  putchar(close);
-}
-
-void lval_print(lval *v)
-{
-  switch (v->type)
-  {
-  case LVAL_NUM:
-    printf("%li", v->num);
-    break;
-  case LVAL_ERR:
-    printf("Error: %s", v->err);
-    break;
-  case LVAL_SYM:
-    printf("%s", v->sym);
-    break;
-  case LVAL_SEXPR:
-    lval_expr_print(v, '(', ')');
-    break;
-  }
-}
-
-void lval_println(lval *v)
-{
-  lval_print(v);
-  putchar('\n');
-}
-
 lval *lval_eval(lval *v);
-
-lval *lval_pop(lval *v, int i)
-{
-  // Find item at index i
-  lval *x = v->cell[i];
-
-  // Shift memory
-  memmove(&v->cell[i], &v->cell[i + 1], sizeof(lval *) * (v->count - i - 1));
-
-  v->count--;
-
-  v->cell = realloc(v->cell, sizeof(lval *) * v->count);
-
-  return x;
-}
-
-lval *lval_take(lval *v, int i)
-{
-  lval *x = lval_pop(v, i);
-  lval_del(x);
-  return x;
-}
 
 lval *builtin_op(lval *a, char *op)
 {
@@ -278,6 +278,10 @@ lval *builtin_op(lval *a, char *op)
     if (strcmp(op, "*") == 0)
     {
       x->num *= y->num;
+    }
+    if (strcmp(op, "%") == 0)
+    {
+      x->num = fmod(x->num, y->num);
     }
     if (strcmp(op, "/") == 0)
     {
@@ -381,7 +385,7 @@ int main(int argc, char **argv)
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
             " number       : /-?[0-9]+/ ;"
-            " symbol       : /[\\+\\-\\*\\/\\^]|add|sub|mul|div|min|max/ ;"
+            " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max/ ;"
             " sexpr        : '(' <expr>* ')' ;"
             " expr         : <number> | <symbol> | <sexpr> ;"
             " notlispy     : /^/ <expr>* /$/ ;   ",
