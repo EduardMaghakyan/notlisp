@@ -24,7 +24,7 @@ void add_history(char *unused) {}
 typedef struct lval
 {
   int type;
-  double num;
+  long num;
   /* Error and Symbol types have some string data */
   char *err;
   char *sym;
@@ -39,7 +39,8 @@ enum
   LVAL_NUM,
   LVAL_ERR,
   LVAL_SYM,
-  LVAL_SEXPR
+  LVAL_SEXPR,
+  LVAL_QEXPR
 };
 
 /* Possible eror types */
@@ -85,6 +86,14 @@ lval *lval_sexpr(void)
   return v;
 }
 
+lval *lval_qexpr(void) {
+  lval *v = malloc(sizeof(lval));
+  v->type = LVAL_QEXPR;
+  v->cell = NULL;
+  v->count = 0;
+  return v;
+}
+
 void lval_del(lval *v)
 {
   switch (v->type)
@@ -101,6 +110,7 @@ void lval_del(lval *v)
 
   /* If Sexpr then delete all elements inside */
   case LVAL_SEXPR:
+  case LVAL_QEXPR:
     for (int i = 0; i < v->count; i++)
     {
       lval_del(v->cell[i]);
@@ -176,7 +186,7 @@ void lval_print(lval *v)
   switch (v->type)
   {
   case LVAL_NUM:
-    printf("%f", v->num);
+    printf("%li", v->num);
     break;
   case LVAL_ERR:
     printf("Error: %s", v->err);
@@ -186,6 +196,9 @@ void lval_print(lval *v)
     break;
   case LVAL_SEXPR:
     lval_expr_print(v, '(', ')');
+    break;
+  case LVAL_QEXPR:
+    lval_expr_print(v, '{', '}');
     break;
   }
 }
@@ -215,9 +228,15 @@ lval *lval_read(mpc_ast_t *t)
   {
     x = lval_sexpr();
   }
+
   if (strstr(t->tag, "sexpr"))
   {
     x = lval_sexpr();
+  }
+
+  if (strstr(t->tag, "qexpr"))
+  {
+    x = lval_qexpr();
   }
 
   /* Fill this list with any valid expression contained within */
@@ -228,6 +247,14 @@ lval *lval_read(mpc_ast_t *t)
       continue;
     }
     if (strcmp(t->children[i]->contents, ")") == 0)
+    {
+      continue;
+    }
+    if (strcmp(t->children[i]->contents, "{") == 0)
+    {
+      continue;
+    }
+    if (strcmp(t->children[i]->contents, "}") == 0)
     {
       continue;
     }
@@ -355,7 +382,7 @@ lval *lval_eval(lval *v)
   return v;
 }
 
-double min(double x, double y)
+long min(long x, long y)
 {
   if (x < y)
   {
@@ -365,7 +392,7 @@ double min(double x, double y)
   return y;
 }
 
-double max(double x, double y)
+long max(long x, long y)
 {
   if (x > y)
   {
@@ -380,16 +407,18 @@ int main(int argc, char **argv)
   mpc_parser_t *Number = mpc_new("number");
   mpc_parser_t *Symbol = mpc_new("symbol");
   mpc_parser_t *Sexpr = mpc_new("sexpr");
+  mpc_parser_t *Qexpr = mpc_new("qexpr");
   mpc_parser_t *Expr = mpc_new("expr");
   mpc_parser_t *NotLispy = mpc_new("notlispy");
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
-            " number       : /-?[0-9]+/ ;"
+            " number       : /[+-]?([0-9]*[.])?[0-9]+/ ;"
             " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max/ ;"
             " sexpr        : '(' <expr>* ')' ;"
-            " expr         : <number> | <symbol> | <sexpr> ;"
+            " qexpr        : '{' <expr>* '}' ;"
+            " expr         : <number> | <symbol> | <sexpr> | <qexpr>;"
             " notlispy     : /^/ <expr>* /$/ ;   ",
-            Number, Symbol, Sexpr, Expr, NotLispy);
+            Number, Symbol, Sexpr, Qexpr, Expr, NotLispy);
 
   while (1)
   {
@@ -416,6 +445,6 @@ int main(int argc, char **argv)
     free(input);
   }
 
-  mpc_cleanup(5, Number, Symbol, Sexpr, Expr, NotLispy);
+  mpc_cleanup(6, Number, Symbol, Sexpr, Qexpr, Expr, NotLispy);
   return 0;
 }
