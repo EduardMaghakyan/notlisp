@@ -289,28 +289,36 @@ lval *builtin_op(lval *a, char *op)
   {
     x->num = -x->num;
   }
+  
+  if (strcmp(op, "incr") == 0 && a->count == 0) {
+    x->num = x->num + 1;
+  }
+  
+  if (strcmp(op, "decr") == 0 && a->count == 0) {
+    x->num = x->num - 1;
+  }
 
   while (a->count > 0)
   {
     // pop next element
     lval *y = lval_pop(a, 0);
-    if (strcmp(op, "+") == 0)
+    if (strcmp(op, "+") == 0 || strcmp(op, "add") == 0)
     {
       x->num += y->num;
     }
-    if (strcmp(op, "-") == 0)
+    if (strcmp(op, "-") == 0 || strcmp(op, "sub") == 0)
     {
       x->num -= y->num;
     }
-    if (strcmp(op, "*") == 0)
+    if (strcmp(op, "*") == 0 || strcmp(op, "mul") == 0)
     {
       x->num *= y->num;
     }
-    if (strcmp(op, "%") == 0)
+    if (strcmp(op, "%") == 0 || strcmp(op, "mod") == 0)
     {
       x->num = fmod(x->num, y->num);
     }
-    if (strcmp(op, "/") == 0)
+    if (strcmp(op, "/") == 0 || strcmp(op, "div") == 0)
     {
       if (y->num == 0)
       {
@@ -321,7 +329,6 @@ lval *builtin_op(lval *a, char *op)
       }
       x->num /= y->num;
     }
-
     lval_del(y);
   }
 
@@ -413,7 +420,7 @@ int main(int argc, char **argv)
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
             " number       : /[+-]?([0-9]*[.])?[0-9]+/ ;"
-            " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max/ ;"
+            " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max|incr|decr/ ;"
             " sexpr        : '(' <expr>* ')' ;"
             " qexpr        : '{' <expr>* '}' ;"
             " expr         : <number> | <symbol> | <sexpr> | <qexpr>;"
