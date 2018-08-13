@@ -429,6 +429,23 @@ lval *builtin_join(lval *a)
   return x;
 }
 
+lval *builtin_len(lval *a)
+{
+  lval *count = malloc(sizeof(lval));
+  count->type = LVAL_NUM;
+  count->num = 0;
+  for (int i = 0; i < a->count; i++)
+  {
+    LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
+            "Function 'join', passed incorrect type");
+    while (a->count)
+    {
+    }
+  }
+
+  return count;
+}
+
 lval *builtin(lval *a, char *func)
 {
   if (strcmp("list", func) == 0)
@@ -450,6 +467,10 @@ lval *builtin(lval *a, char *func)
   if (strcmp("eval", func) == 0)
   {
     return builtin_eval(a);
+  }
+  if (strcmp("len", func) == 0)
+  {
+    return builtin_len(a);
   }
   if (strstr("+,-,/,*,%,add,sub,mul,div,min,max,incr,decr,head,tail,list,join,eval", func))
   {
@@ -543,7 +564,7 @@ int main(int argc, char **argv)
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
             " number       : /[+-]?([0-9]*[.])?[0-9]+/ ;"
-            " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max|incr|decr|head|tail|list|join|eval/ ;"
+            " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max|incr|decr|head|tail|list|join|eval|len/ ;"
             " sexpr        : '(' <expr>* ')' ;"
             " qexpr        : '{' <expr>* '}' ;"
             " expr         : <number> | <symbol> | <sexpr> | <qexpr>;"
