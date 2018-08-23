@@ -158,8 +158,8 @@ lval *lval_pop(lval *v, int i)
   v->count--;
 
   v->cell = realloc(v->cell, sizeof(lval *) * v->count);
-
   return x;
+
 }
 
 lval *lval_take(lval *v, int i)
@@ -431,20 +431,45 @@ lval *builtin_join(lval *a)
 
 lval *builtin_len(lval *a)
 {
-  lval *count = malloc(sizeof(lval));
-  count->type = LVAL_NUM;
-  count->num = 0;
-  for (int i = 0; i < a->count; i++)
-  {
-    LASSERT(a, a->cell[i]->type == LVAL_QEXPR,
-            "Function 'join', passed incorrect type");
-    while (a->count)
-    {
-    }
-  }
+  LASSERT(a, a->count == 1,
+            "Function 'len' passed too many arguments!");
+  LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
+            "Function 'len' passed incorrect type!");
+  
+  long count = 1;
+  /* Valid usage take first argument */
+  lval *v = lval_take(a, 0);
 
-  return count;
+  /* Clear the rest */
+  for(int i = 0; i < v->count; i++)
+  {
+    lval *tmp = lval_pop(v, i);
+    if (tmp->type == LVAL_QEXPR) {
+      lval *tmpcount = builtin_len(tmp);
+      count += tmpcount->count;
+    } else {
+      count += 1;
+    }
+    lval_del(tmp);
+  }
+  lval_del(a);
+  return lval_num(count);
 }
+
+lval *builtin_cons(lval *a) {
+  LASSERT(a, a->count == 2,
+            "Function 'cons' passed too many arguments!");
+  LASSERT(a, a->cell[1]->type == LVAL_QEXPR,
+            "Function 'const' passed incorrect type!");
+  lval *result = lval_qexpr();
+  
+  lval *v = lval_pop(a, 0);
+  lval_add(result, v);
+  result = lval_join(result, lval_pop(a, 0));
+  
+  return result;
+}
+
 
 lval *builtin(lval *a, char *func)
 {
@@ -471,6 +496,10 @@ lval *builtin(lval *a, char *func)
   if (strcmp("len", func) == 0)
   {
     return builtin_len(a);
+  }
+  if (strcmp("cons", func) == 0)
+  {
+    return builtin_cons(a);
   }
   if (strstr("+,-,/,*,%,add,sub,mul,div,min,max,incr,decr,head,tail,list,join,eval", func))
   {
@@ -564,7 +593,7 @@ int main(int argc, char **argv)
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
             " number       : /[+-]?([0-9]*[.])?[0-9]+/ ;"
-            " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max|incr|decr|head|tail|list|join|eval|len/ ;"
+            " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max|incr|decr|head|tail|list|join|eval|len|cons/ ;"
             " sexpr        : '(' <expr>* ')' ;"
             " qexpr        : '{' <expr>* '}' ;"
             " expr         : <number> | <symbol> | <sexpr> | <qexpr>;"
