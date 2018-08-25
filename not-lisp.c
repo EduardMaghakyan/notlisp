@@ -466,7 +466,6 @@ lval *builtin_cons(lval *a) {
   lval *v = lval_pop(a, 0);
   lval_add(result, v);
   result = lval_join(result, lval_pop(a, 0));
-  
   return result;
 }
 
