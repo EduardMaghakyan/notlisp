@@ -436,23 +436,20 @@ lval *builtin_len(lval *a)
   LASSERT(a, a->cell[0]->type == LVAL_QEXPR,
             "Function 'len' passed incorrect type!");
   
-  long count = 1;
-  /* Valid usage take first argument */
+  long count = 0;
   lval *v = lval_take(a, 0);
 
   /* Clear the rest */
-  for(int i = 0; i < v->count; i++)
+  while(v->count)
   {
-    lval *tmp = lval_pop(v, i);
+    lval *tmp = lval_pop(v, 0);
     if (tmp->type == LVAL_QEXPR) {
       lval *tmpcount = builtin_len(tmp);
       count += tmpcount->count;
     } else {
       count += 1;
     }
-    lval_del(tmp);
   }
-  lval_del(a);
   return lval_num(count);
 }
 
@@ -592,7 +589,7 @@ int main(int argc, char **argv)
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
             " number       : /[+-]?([0-9]*[.])?[0-9]+/ ;"
-            " symbol       : /[\\+\\-\\*\\/\\^\\%]|add|sub|mul|div|min|max|incr|decr|head|tail|list|join|eval|len|cons/ ;"
+            " symbol       : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;"
             " sexpr        : '(' <expr>* ')' ;"
             " qexpr        : '{' <expr>* '}' ;"
             " expr         : <number> | <symbol> | <sexpr> | <qexpr>;"
