@@ -305,7 +305,7 @@ void lval_print(lval *v)
     lval_expr_print(v, '{', '}');
     break;
   case LVAL_FUN:
-    printf("<function>");
+    printf("<%s>", v->sym);
     break;
   }
 }
@@ -676,6 +676,8 @@ lval *lval_eval(lenv *e, lval *v)
   if (v->type == LVAL_SYM)
   {
     lval *x = lenv_get(e, v);
+    x->sym = malloc(strlen(v->sym) + 1);
+    strcpy(x->sym, v->sym);
     lval_del(v);
     return x;
   }
