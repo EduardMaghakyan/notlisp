@@ -169,6 +169,7 @@ lval *lval_qexpr(void)
   return v;
 }
 
+void lenv_del(lenv *e);
 void lval_del(lval *v)
 {
   switch (v->type)
@@ -196,7 +197,7 @@ void lval_del(lval *v)
   case LVAL_FUN:
     if (!v->builtin)
     {
-      lval_del(v->env);
+      lenv_del(v->env);
       lval_del(v->formals);
       lval_del(v->body);
     }
@@ -207,23 +208,7 @@ void lval_del(lval *v)
   free(v);
 }
 
-lenv *lenv_copy(lenv *e)
-{
-  lenv *n = malloc(sizeof(lenv));
-  n->parent = e->parent;
-  n->count = e->count;
-  n->syms = malloc(sizeof(char *) * n->count);
-  n->vals = malloc(sizeof(char *) * n->count);
-  for (int i = 0; i < e->count; i++)
-  {
-    n->syms[i] = malloc(strlen(e->syms[i]) + 1);
-    strcpy(n->syms[i], e->syms[i]);
-    n->vals[i] = lval_copy(e->vals[i]);
-  }
-
-  return n;
-}
-
+lenv *lenv_copy(lenv *e);
 lval *lval_copy(lval *v)
 {
   lval *x = malloc(sizeof(lval));
@@ -240,8 +225,8 @@ lval *lval_copy(lval *v)
     {
       x->builtin = NULL;
       x->env = lenv_copy(v->env);
-      x->formals = lenv_copy(v->formals);
-      x->body = lenv_copy(v->body);
+      x->formals = lval_copy(v->formals);
+      x->body = lval_copy(v->body);
     }
     break;
   case LVAL_NUM:
@@ -379,6 +364,34 @@ lenv *lenv_new(void)
   return e;
 }
 
+void lenv_del(lenv *e)
+{
+  for (int i = 0; i < e->count; i++)
+  {
+    free(e->syms[i]);
+    lval_del(e->vals[i]);
+  }
+  free(e->syms);
+  free(e->vals);
+  free(e);
+}
+
+lenv *lenv_copy(lenv *e)
+{
+  lenv *n = malloc(sizeof(lenv));
+  n->parent = e->parent;
+  n->count = e->count;
+  n->syms = malloc(sizeof(char *) * n->count);
+  n->vals = malloc(sizeof(lval *) * n->count);
+  for (int i = 0; i < e->count; i++)
+  {
+    n->syms[i] = malloc(strlen(e->syms[i]) + 1);
+    strcpy(n->syms[i], e->syms[i]);
+    n->vals[i] = lval_copy(e->vals[i]);
+  }
+  return n;
+}
+
 lval *lval_lambda(lval *formals, lval *body)
 {
   lval *v = malloc(sizeof(lval));
@@ -394,18 +407,6 @@ lval *lval_lambda(lval *formals, lval *body)
   v->body = body;
 
   return v;
-}
-
-void lenv_del(lenv *e)
-{
-  for (int i = 0; i < e->count; i++)
-  {
-    free(e->syms[i]);
-    lval_del(e->vals[i]);
-  }
-  free(e->syms);
-  free(e->vals);
-  free(e);
 }
 
 lval *lenv_get(lenv *e, lval *k)
@@ -452,9 +453,9 @@ void lenv_put(lenv *e, lval *k, lval *v)
 
 void lenv_def(lenv *e, lval *k, lval *v)
 {
-  while (e->par)
+  while (e->parent)
   {
-    e = e->par;
+    e = e->parent;
   }
 
   lenv_put(e, k, v);
@@ -671,6 +672,43 @@ lval *builtin_div(lenv *e, lval *a)
   return builtin_op(e, a, "/");
 }
 
+lval *builtin_var(lenv *e, lval *a, char *func)
+{
+  LASSERT_TYPE(func, a, 0, LVAL_QEXPR);
+
+  lval *syms = a->cell[0];
+  for (int i = 0; i < syms->count; i++)
+  {
+    LASSERT(a, (syms->cell[i]->type == LVAL_SYM),
+            "Function '%s' cannot define non-symbol. "
+            "Got %s, Expected %s.",
+            func,
+            ltype_name(syms->cell[i]->type), ltype_name(LVAL_SYM));
+  }
+
+  LASSERT(a, (syms->count == a->count - 1),
+          "Function '%s' passed too many arguments for symbols. "
+          "Got %i, Expected %i.",
+          func, syms->count, a->count - 1);
+
+  for (int i = 0; i < syms->count; i++)
+  {
+    /* If 'def' define in globally. If 'put' define in locally */
+    if (strcmp(func, "def") == 0)
+    {
+      lenv_def(e, syms->cell[i], a->cell[i + 1]);
+    }
+
+    if (strcmp(func, "=") == 0)
+    {
+      lenv_put(e, syms->cell[i], a->cell[i + 1]);
+    }
+  }
+
+  lval_del(a);
+  return lval_sexpr();
+}
+
 lval *builtin_def(lenv *e, lval *a)
 {
   return builtin_var(e, a, "def");
@@ -679,29 +717,6 @@ lval *builtin_def(lenv *e, lval *a)
 lval *builtin_put(lenv *e, lval *a)
 {
   return builtin_var(e, a, "=");
-}
-
-lval *builtin_var(lenv *e, lval *a)
-{
-  LASSERT(a, a->cell[0]->type == LVAL_QEXPR, "Incorrect type passed to function 'def'");
-
-  lval *syms = a->cell[0];
-
-  for (int i = 0; i < syms->count; i++)
-  {
-    LASSERT(a, syms->cell[i]->type == LVAL_SYM, "Function 'def' cannot define non-symbol");
-  }
-
-  LASSERT(a, syms->count == a->count - 1, "Function 'def' cannot define incorrect "
-                                          "number of values to symbols");
-
-  for (int i = 0; i < syms->count; i++)
-  {
-    lenv_put(e, syms->cell[i], a->cell[i + 1]);
-  }
-
-  lval_del(a);
-  return lval_sexpr();
 }
 
 void lenv_add_builtin(lenv *e, char *name, lbuiltin func)
