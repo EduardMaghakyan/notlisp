@@ -217,7 +217,7 @@ lval *lval_copy(lval *v)
   switch (v->type)
   {
   case LVAL_FUN:
-    if (x->builtin)
+    if (v->builtin)
     {
       x->builtin = v->builtin;
     }
@@ -275,14 +275,10 @@ lval *lval_join(lval *x, lval *y)
 
 lval *lval_pop(lval *v, int i)
 {
-  // Find item at index i
   lval *x = v->cell[i];
-
-  // Shift memory
-  memmove(&v->cell[i], &v->cell[i + 1], sizeof(lval *) * (v->count - i - 1));
-
+  memmove(&v->cell[i],
+          &v->cell[i + 1], sizeof(lval *) * (v->count - i - 1));
   v->count--;
-
   v->cell = realloc(v->cell, sizeof(lval *) * v->count);
   return x;
 }
@@ -759,6 +755,80 @@ void lenv_add_builtins(lenv *e)
 }
 
 // Evaluation
+lval *lval_call(lenv *e, lval *f, lval *a)
+{
+  if (f->builtin)
+  {
+    return f->builtin(e, a);
+  }
+  int given = a->count;
+  int total = f->formals->count;
+
+  while (a->count)
+  {
+    if (f->formals->count == 0)
+    {
+      lval_del(a);
+      return lval_err("Function passed too many arguments. "
+                      "Got %i, Expected %i.",
+                      given, total);
+    }
+
+    lval *sym = lval_pop(f->formals, 0);
+
+    if (strcmp(sym->sym, "&") == 0)
+    {
+      if (f->formals->count != 1)
+      {
+        lval_del(a);
+        return lval_err("Function format invalid. "
+                        "Symbol '&' not followed by single symbol.");
+      }
+      lval *nsym = lval_pop(f->formals, 0);
+      lenv_put(f->env, nsym, builtin_list(e, a));
+      lval_del(sym);
+      lval_del(nsym);
+      break;
+    }
+
+    lval *val = lval_pop(a, 0);
+    lenv_put(f->env, sym, val);
+    lval_del(sym);
+    lval_del(val);
+  }
+  lval_del(a);
+
+  if (f->formals->count > 0 &&
+      strcmp(f->formals->cell[0]->sym, "&") == 0)
+  {
+
+    /* Check to ensure that & is not passed invalidly. */
+    if (f->formals->count != 2)
+    {
+      return lval_err("Function format invalid. "
+                      "Symbol '&' not followed by single symbol.");
+    }
+
+    lval_del(lval_pop(f->formals, 0));
+    lval *sym = lval_pop(f->formals, 0);
+    lval *val = lval_qexpr();
+    lenv_put(f->env, sym, val);
+    lval_del(sym);
+    lval_del(val);
+  }
+
+  if (f->formals->count == 0)
+  {
+
+    f->env->parent = e;
+    return builtin_eval(f->env,
+                        lval_add(lval_sexpr(), lval_copy(f->body)));
+  }
+  else
+  {
+    return lval_copy(f);
+  }
+}
 
 lval *lval_eval_sexpr(lenv *e, lval *v)
 {
@@ -781,20 +851,24 @@ lval *lval_eval_sexpr(lenv *e, lval *v)
   }
   if (v->count == 1)
   {
-    return lval_take(v, 0);
+    return lval_eval(e, lval_take(v, 0));
   }
 
   /* Ensure first element is a function after evaluation */
   lval *f = lval_pop(v, 0);
   if (f->type != LVAL_FUN)
   {
-    lval_del(v);
+    lval *err = lval_err(
+        "S-Expression starts with incorrect type. "
+        "Got %s, Expected %s.",
+        ltype_name(f->type), ltype_name(LVAL_FUN));
     lval_del(f);
-    return lval_err("first element is not a function");
+    lval_del(v);
+    return err;
   }
 
   /* If so call function to get result */
-  lval *result = f->builtin(e, v);
+  lval *result = lval_call(e, f, v);
   lval_del(f);
   return result;
 }
