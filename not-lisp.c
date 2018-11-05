@@ -854,6 +854,20 @@ lval *builtin_or(lenv *e, lval *a)
   return lval_num(x);
 }
 
+lval *builtin_not(lenv *e, lval *a)
+{
+  LASSERT_NUM("!", a, 1);
+  int x;
+  if (a->cell[0]->type == LVAL_QEXPR)
+  {
+    a->cell[0]->type = LVAL_SEXPR;
+  }
+
+  lval *b = lval_eval(e, lval_pop(a, 0));
+  x = !b->num;
+  return lval_num(x);
+}
+
 lval *builtin_var(lenv *e, lval *a, char *func)
 {
   LASSERT_TYPE(func, a, 0, LVAL_QEXPR);
@@ -960,6 +974,7 @@ void lenv_add_builtins(lenv *e)
   /* Boolean logic */
   lenv_add_builtin(e, "&&", builtin_and);
   lenv_add_builtin(e, "||", builtin_or);
+  lenv_add_builtin(e, "!", builtin_not);
 }
 
 // Evaluation
@@ -1177,7 +1192,7 @@ int main(int argc, char **argv)
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
             " number       : /[+-]?([0-9]*[.])?[0-9]+/ ;"
-            " symbol       : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&]+/ ;"
+            " symbol       : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&|]+/ ;"
             " sexpr        : '(' <expr>* ')' ;"
             " qexpr        : '{' <expr>* '}' ;"
             " expr         : <number> | <symbol> | <sexpr> | <qexpr>;"
@@ -1193,7 +1208,10 @@ int main(int argc, char **argv)
   while (1)
   {
     char *input = readline("not-lisp > ");
-    add_history(input);
+    if (strlen(input) > 0)
+    {
+      add_history(input);
+    }
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, NotLispy, &r))
     {
