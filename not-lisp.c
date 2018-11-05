@@ -59,6 +59,7 @@ enum
 {
   LVAL_ERR,
   LVAL_NUM,
+  LVAL_BOOl,
   LVAL_SYM,
   LVAL_FUN,
   LVAL_SEXPR,
@@ -73,6 +74,8 @@ char *ltype_name(int t)
     return "Function";
   case LVAL_NUM:
     return "Number";
+  case LVAL_BOOl:
+    return "Boolean";
   case LVAL_ERR:
     return "Error";
   case LVAL_SYM:
@@ -87,6 +90,11 @@ char *ltype_name(int t)
 }
 
 typedef lval *(*lbuiltin)(lenv *, lval *);
+typedef enum
+{
+  false,
+  true
+} bool;
 
 struct lval
 {
@@ -109,6 +117,14 @@ lval *lval_num(long x)
   lval *v = malloc(sizeof(lval));
   v->type = LVAL_NUM;
   v->num = x;
+  return v;
+}
+
+lval *lval_bool(long x)
+{
+  lval *v = malloc(sizeof(lval));
+  v->type = LVAL_BOOl;
+  v->num = !!x;
   return v;
 }
 
@@ -331,6 +347,16 @@ void lval_print(lval *v)
     break;
   case LVAL_FUN:
     printf("<%s>", v->sym);
+    break;
+  case LVAL_BOOl:
+    if (v->num)
+    {
+      printf("%s", "true");
+    }
+    else
+    {
+      printf("%s", "false");
+    }
     break;
   }
 }
@@ -729,6 +755,7 @@ int lval_eq(lval *x, lval *y)
   switch (x->type)
   {
   case LVAL_NUM:
+  case LVAL_BOOl:
     return (x->num == y->num);
   case LVAL_ERR:
     return (strcmp(x->err, y->err) == 0);
@@ -790,7 +817,6 @@ lval *builtin_ne(lenv *e, lval *a)
 lval *builtin_if(lenv *e, lval *a)
 {
   LASSERT_NUM("if", a, 3);
-  LASSERT_TYPE("if", a, 0, LVAL_NUM);
   LASSERT_TYPE("if", a, 1, LVAL_QEXPR);
   LASSERT_TYPE("if", a, 2, LVAL_QEXPR);
 
@@ -830,7 +856,7 @@ lval *builtin_and(lenv *e, lval *a)
   lval *b = lval_eval(e, lval_pop(a, 0));
   lval *c = lval_eval(e, lval_pop(a, 0));
   x = (b->num && c->num);
-  return lval_num(x);
+  return lval_bool(x);
 }
 
 lval *builtin_or(lenv *e, lval *a)
@@ -1122,6 +1148,13 @@ lval *lval_read_num(mpc_ast_t *t)
   return errno != ERANGE ? lval_num(x) : lval_err("invalid number");
 }
 
+lval *lval_read_bool(mpc_ast_t *t)
+{
+  errno = 0;
+  int x = (strcmp(t->contents, "true") == 0);
+  return errno != ERANGE ? lval_bool(x) : lval_err("invalid number");
+}
+
 lval *lval_read(mpc_ast_t *t)
 {
 
@@ -1129,6 +1162,10 @@ lval *lval_read(mpc_ast_t *t)
   if (strstr(t->tag, "number"))
   {
     return lval_read_num(t);
+  }
+  if (strstr(t->tag, "boolean"))
+  {
+    return lval_read_bool(t);
   }
   if (strstr(t->tag, "symbol"))
   {
@@ -1184,6 +1221,7 @@ lval *lval_read(mpc_ast_t *t)
 int main(int argc, char **argv)
 {
   mpc_parser_t *Number = mpc_new("number");
+  mpc_parser_t *Boolean = mpc_new("boolean");
   mpc_parser_t *Symbol = mpc_new("symbol");
   mpc_parser_t *Sexpr = mpc_new("sexpr");
   mpc_parser_t *Qexpr = mpc_new("qexpr");
@@ -1191,13 +1229,14 @@ int main(int argc, char **argv)
   mpc_parser_t *NotLispy = mpc_new("notlispy");
   /* Define them with the following Language */
   mpca_lang(MPCA_LANG_DEFAULT,
+            " boolean      : /true|false/ ;"
             " number       : /[+-]?([0-9]*[.])?[0-9]+/ ;"
             " symbol       : /[a-zA-Z0-9_+\\-*\\/\\\\=<>!&|]+/ ;"
             " sexpr        : '(' <expr>* ')' ;"
             " qexpr        : '{' <expr>* '}' ;"
-            " expr         : <number> | <symbol> | <sexpr> | <qexpr>;"
+            " expr         : <boolean> | <number> | <symbol> | <sexpr> | <qexpr>;"
             " notlispy     : /^/ <expr>* /$/ ;   ",
-            Number, Symbol, Sexpr, Qexpr, Expr, NotLispy);
+            Boolean, Number, Symbol, Sexpr, Qexpr, Expr, NotLispy);
 
   puts("Not Lispy Version 0.0.0.0.9");
   puts("Press Ctrl+c to Exit\n");
