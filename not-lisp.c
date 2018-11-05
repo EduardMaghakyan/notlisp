@@ -877,7 +877,7 @@ lval *builtin_or(lenv *e, lval *a)
   lval *b = lval_eval(e, lval_pop(a, 0));
   lval *c = lval_eval(e, lval_pop(a, 0));
   x = (b->num || c->num);
-  return lval_num(x);
+  return lval_bool(x);
 }
 
 lval *builtin_not(lenv *e, lval *a)
@@ -891,7 +891,7 @@ lval *builtin_not(lenv *e, lval *a)
 
   lval *b = lval_eval(e, lval_pop(a, 0));
   x = !b->num;
-  return lval_num(x);
+  return lval_bool(x);
 }
 
 lval *builtin_var(lenv *e, lval *a, char *func)
