@@ -801,15 +801,57 @@ lval *builtin_if(lenv *e, lval *a)
 
   if (a->cell[0]->num)
   {
-    x = lval_eval(e, a->cell[1]);
+    x = lval_eval(e, lval_pop(a, 1));
   }
   else
   {
-    x = lval_eval(e, a->cell[2]);
+    x = lval_eval(e, lval_pop(a, 2));
   }
 
   lval_del(a);
   return x;
+}
+
+lval *builtin_and(lenv *e, lval *a)
+{
+  LASSERT_NUM("&&", a, 2);
+
+  int x;
+  if (a->cell[0]->type == LVAL_QEXPR)
+  {
+    a->cell[0]->type = LVAL_SEXPR;
+  }
+
+  if (a->cell[1]->type == LVAL_QEXPR)
+  {
+    a->cell[1]->type = LVAL_SEXPR;
+  }
+
+  lval *b = lval_eval(e, lval_pop(a, 0));
+  lval *c = lval_eval(e, lval_pop(a, 0));
+  x = (b->num && c->num);
+  return lval_num(x);
+}
+
+lval *builtin_or(lenv *e, lval *a)
+{
+  LASSERT_NUM("||", a, 2);
+
+  int x;
+  if (a->cell[0]->type == LVAL_QEXPR)
+  {
+    a->cell[0]->type = LVAL_SEXPR;
+  }
+
+  if (a->cell[1]->type == LVAL_QEXPR)
+  {
+    a->cell[1]->type = LVAL_SEXPR;
+  }
+
+  lval *b = lval_eval(e, lval_pop(a, 0));
+  lval *c = lval_eval(e, lval_pop(a, 0));
+  x = (b->num || c->num);
+  return lval_num(x);
 }
 
 lval *builtin_var(lenv *e, lval *a, char *func)
@@ -914,6 +956,10 @@ void lenv_add_builtins(lenv *e)
   lenv_add_builtin(e, "==", builtin_eq);
   lenv_add_builtin(e, "!=", builtin_ne);
   lenv_add_builtin(e, "if", builtin_if);
+
+  /* Boolean logic */
+  lenv_add_builtin(e, "&&", builtin_and);
+  lenv_add_builtin(e, "||", builtin_or);
 }
 
 // Evaluation
@@ -1138,7 +1184,7 @@ int main(int argc, char **argv)
             " notlispy     : /^/ <expr>* /$/ ;   ",
             Number, Symbol, Sexpr, Qexpr, Expr, NotLispy);
 
-  puts("Not Lispy Version 0.0.0.0.7");
+  puts("Not Lispy Version 0.0.0.0.9");
   puts("Press Ctrl+c to Exit\n");
 
   lenv *e = lenv_new();
@@ -1151,9 +1197,6 @@ int main(int argc, char **argv)
     mpc_result_t r;
     if (mpc_parse("<stdin>", input, NotLispy, &r))
     {
-      /* On success print and delete the AST */
-      // mpc_ast_print(r.output);
-      // lval result = eval(r.output);
       lval *x = lval_eval(e, lval_read(r.output));
       lval_println(x);
       lval_del(x);
